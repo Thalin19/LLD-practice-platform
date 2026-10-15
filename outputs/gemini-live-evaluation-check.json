@@ -1,0 +1,31 @@
+{
+  "startedAt": "2026-10-14T17:05:29.524Z",
+  "finishedAt": "2026-10-14T17:05:30.630Z",
+  "model": "gemini-3.8-flash",
+  "promptVersion": "1",
+  "problemId": "parking-lot",
+  "problemVersion": "1",
+  "rubricVersion": "1",
+  "answerCharacters": 1087,
+  "maxCompletionTokens": 1200,
+  "requests": 1,
+  "automaticRetries": 0,
+  "httpStatus": 400,
+  "finishReason": null,
+  "usage": null,
+  "status": "failed",
+  "feedback": null,
+  "failure": {
+    "code": "PROVIDER_REJECTED",
+    "message": "The provider rejected the evaluation request."
+  },
+  "sections": {
+    "requirements": "One lot with matching motorcycle/car spots. Reject full capacity, duplicate active vehicles, and invalid tickets. Round fees up to started hours with a one-hour minimum. Release the spot only after successful payment.",
+    "responsibilities": "ParkingLot owns allocation. Spot owns occupancy and vehicle type. Ticket records vehicle, spot, entry time, and status. PricingPolicy computes fees. PaymentGateway charges. Clock supplies time.",
+    "interactions": "Entry locks allocation, finds a free matching spot, reserves it, and issues a ticket. Exit finds the active ticket, computes the fee, pays, then closes the ticket and releases the spot. Failed payment keeps the ticket and occupancy. Repeated exit returns an error without charging.",
+    "edgeCases": "Use fake clock and payment implementations. Test full or mismatched capacity, duplicate entry and exit, failed payment, 59/60/61-minute fee boundaries, and simultaneous allocations.",
+    "tradeOffs": "A single-process lock keeps allocation atomic. A pricing interface supports new rate policies. The lock does not coordinate multiple processes; persistent transactions would replace it if that scope were introduced."
+  },
+  "evaluationId": "live-check-evaluation-af025307-1dd6-415b-80ba-13e5e5808557",
+  "validation": "No accepted feedback was saved."
+}

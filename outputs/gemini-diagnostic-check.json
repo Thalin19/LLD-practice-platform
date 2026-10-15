@@ -1,0 +1,13 @@
+{
+  "startedAt": "2026-10-14T17:12:21.668Z",
+  "finishedAt": "2026-10-14T17:12:22.458Z",
+  "model": "gemini-3.8-flash",
+  "requests": 1,
+  "automaticRetries": 0,
+  "httpStatus": 400,
+  "providerStatus": "INVALID_ARGUMENT",
+  "providerMessage": "Thinking level MINIMAL is not supported for this model. Please retry with other thinking level.",
+  "providerDetails": [],
+  "feedbackValidation": null,
+  "validatedFeedback": null
+}

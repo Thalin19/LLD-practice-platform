@@ -1,0 +1,87 @@
+import { randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { EvaluationProcessor } from '../src/application/evaluation-processor.ts';
+import { PracticeService } from '../src/application/practice-service.ts';
+import { GroqEvaluator } from '../src/infrastructure/groq/evaluator.ts';
+import { EVALUATION_PROMPT_VERSION, GROQ_MODEL, MAX_COMPLETION_TOKENS } from '../src/infrastructure/groq/request.ts';
+import { SqlitePracticeRepository } from '../src/infrastructure/sqlite/practice-repository.ts';
+import { seedCatalogue } from '../src/infrastructure/sqlite/seed-catalogue.ts';
+import { loadCredential } from '../src/runtime/config.ts';
+import { submissionCharacterCount } from '../src/domain/design.ts';
+import { isRecord } from '../src/domain/errors.ts';
+
+const directory = fileURLToPath(new URL('../work/live-evaluation/', import.meta.url));
+const reportFile = fileURLToPath(new URL('../outputs/live-evaluation-check.json', import.meta.url));
+const requestMarker = fileURLToPath(new URL('../work/live-evaluation/request-started.json', import.meta.url));
+
+// This is a one-shot, explicitly authorized check, never part of npm test or server startup.
+// Rerunning it displays the prior result instead of spending more quota.
+if (existsSync(reportFile)) {
+  const previous: unknown = JSON.parse(readFileSync(reportFile, 'utf8'));
+  if (isRecord(previous)) console.log(JSON.stringify({ existingReport: true, status: previous.status,
+    usage: previous.usage, newRequests: 0 }));
+} else if (existsSync(requestMarker)) {
+  console.log('A live request was already attempted. No additional request was made. Review the saved marker and result before authorizing more work.');
+  process.exitCode = 1;
+} else {
+  mkdirSync(directory, { recursive: true });
+  const repository = new SqlitePracticeRepository(fileURLToPath(new URL('../work/live-evaluation/practice.sqlite', import.meta.url)));
+  try {
+    seedCatalogue(repository);
+    const apiKey = loadCredential('GROQ_API_KEY');
+    let requests = 0;
+    let httpStatus: number | null = null;
+    let finishReason: string | null = null;
+    let usage: { promptTokens: number | null; completionTokens: number | null; totalTokens: number | null } | null = null;
+    const startedAt = new Date().toISOString();
+    const evaluator = new GroqEvaluator({ apiKey, fetch: async (url, init) => {
+      if (requests !== 0) throw new Error('The authorized live request limit was reached.');
+      // Exclusive creation prevents a repeated or concurrent script invocation from sending again.
+      writeFileSync(requestMarker, JSON.stringify({ startedAt, model: GROQ_MODEL, promptVersion: EVALUATION_PROMPT_VERSION }), { flag: 'wx' });
+      requests++;
+      const response = await fetch(url, init);
+      httpStatus = response.status;
+      if (response.ok) {
+        const envelope: unknown = await response.clone().json();
+        if (isRecord(envelope)) {
+          const counts = isRecord(envelope.usage) ? envelope.usage : {};
+          const tokenCount = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+          usage = { promptTokens: tokenCount(counts.prompt_tokens), completionTokens: tokenCount(counts.completion_tokens), totalTokens: tokenCount(counts.total_tokens) };
+          if (Array.isArray(envelope.choices) && isRecord(envelope.choices[0])) {
+            const reason: unknown = envelope.choices[0].finish_reason;
+            if (typeof reason === 'string' && ['stop', 'length', 'content_filter', 'tool_calls'].includes(reason)) finishReason = reason;
+          }
+        }
+      }
+      return response;
+    } });
+    const service = new PracticeService(repository, { learnerId: 'live-check', evaluatorId: evaluator.id,
+      createId: (kind) => `live-check-${kind}-${randomUUID()}` });
+    const sections = {
+      requirements: 'One lot with matching motorcycle/car spots. Reject full capacity, duplicate active vehicles, and invalid tickets. Round fees up to started hours with a one-hour minimum. Release the spot only after successful payment.',
+      responsibilities: 'ParkingLot owns allocation. Spot owns occupancy and vehicle type. Ticket records vehicle, spot, entry time, and status. PricingPolicy computes fees. PaymentGateway charges. Clock supplies time.',
+      interactions: 'Entry locks allocation, finds a free matching spot, reserves it, and issues a ticket. Exit finds the active ticket, computes the fee, pays, then closes the ticket and releases the spot. Failed payment keeps the ticket and occupancy. Repeated exit returns an error without charging.',
+      edgeCases: 'Use fake clock and payment implementations. Test full or mismatched capacity, duplicate entry and exit, failed payment, 59/60/61-minute fee boundaries, and simultaneous allocations.',
+      tradeOffs: 'A single-process lock keeps allocation atomic. A pricing interface supports new rate policies. The lock does not coordinate multiple processes; persistent transactions would replace it if that scope were introduced.',
+    };
+    const draft = service.startAttempt('parking-lot', '1');
+    const saved = service.saveDraft({ attemptId: draft.value.id, expectedRevision: draft.revision, patch: sections });
+    const submitted = service.submitAttempt({ attemptId: draft.value.id, expectedRevision: saved.revision });
+    const result = await new EvaluationProcessor(repository, evaluator).processNext();
+    if (result === null) throw new Error('No queued live check was found.');
+    const report = {
+      startedAt, finishedAt: new Date().toISOString(), model: GROQ_MODEL,
+      promptVersion: EVALUATION_PROMPT_VERSION, problemId: 'parking-lot', problemVersion: '1', rubricVersion: '1',
+      answerCharacters: submissionCharacterCount(sections), maxCompletionTokens: MAX_COMPLETION_TOKENS,
+      requests, automaticRetries: 0, httpStatus, finishReason, usage,
+      status: result.value.status, feedback: result.value.feedback, failure: result.value.failure,
+      sections, evaluationId: submitted.evaluation.value.id,
+      validation: result.value.status === 'completed' ? 'Accepted by the domain rubric validator and persisted in the isolated check database.' : 'No accepted feedback was saved.',
+    };
+    writeFileSync(reportFile, JSON.stringify(report, null, 2) + '\n', { flag: 'wx' });
+    console.log(JSON.stringify({ status: report.status, requests, httpStatus, finishReason, usage,
+      assessmentCount: report.feedback?.assessments.length ?? 0, failureCode: report.failure?.code ?? null }));
+    if (report.status !== 'completed') process.exitCode = 1;
+  } finally { repository.close(); }
+}

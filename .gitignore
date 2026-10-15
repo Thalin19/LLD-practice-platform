@@ -1,0 +1,34 @@
+# Local API credentials
+.env
+.env.*
+!.env.example
+
+# Dependencies, builds, and caches
+node_modules/
+dist/
+coverage/
+.npm-cache/
+*.log
+*.tsbuildinfo
+
+# Local databases, intermediate files, and release archives
+/data/
+/work/
+/submission/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# Browser reports outside the configured work directory
+playwright-report/
+test-results/
+
+# Machine-specific editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Original assignment brief; keep final deliverable PDFs under outputs/
+/CipherSchools-Hiring-Assignment-*.pdf

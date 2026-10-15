@@ -1,0 +1,103 @@
+{
+  "startedAt": "2026-10-15T04:24:12.126Z",
+  "finishedAt": "2026-10-15T04:24:27.304Z",
+  "model": "gemini-3.8-flash",
+  "promptVersion": "1",
+  "problemId": "parking-lot",
+  "problemVersion": "1",
+  "rubricVersion": "1",
+  "answerCharacters": 1087,
+  "maxCompletionTokens": 1200,
+  "requests": 1,
+  "automaticRetries": 0,
+  "thinkingLevel": "LOW",
+  "httpStatus": 200,
+  "finishReason": "STOP",
+  "usage": {
+    "promptTokens": 1056,
+    "completionTokens": 770,
+    "thinkingTokens": null,
+    "totalTokens": 1826
+  },
+  "providerDiagnostic": null,
+  "status": "completed",
+  "feedback": {
+    "assessments": [
+      {
+        "criterionId": "requirements_coverage",
+        "label": "needs_improvement",
+        "evidence": [
+          {
+            "sectionId": "requirements",
+            "quote": "One lot with matching motorcycle/car spots. Reject full capacity, duplicate active vehicles, and invalid tickets."
+          }
+        ],
+        "explanation": "The submission touches on the primary flows but omits how available capacity is reported by vehicle type and does not address rate change assumptions.",
+        "suggestion": "Explicitly detail how capacity is queried per vehicle type and how in-flight parking sessions handle mid-stay rate changes."
+      },
+      {
+        "criterionId": "class_responsibilities",
+        "label": "strong",
+        "evidence": [
+          {
+            "sectionId": "responsibilities",
+            "quote": "ParkingLot owns allocation. Spot owns occupancy and vehicle type. Ticket records vehicle, spot, entry time, and status. PricingPolicy computes fees. PaymentGateway charges. Clock supplies time."
+          }
+        ],
+        "explanation": "Responsibilities are divided cohesively among domain entities, policies, and service collaborators.",
+        "suggestion": "Define specific methods on each class to clarify the operational boundaries further."
+      },
+      {
+        "criterionId": "relationships_interfaces",
+        "label": "needs_improvement",
+        "evidence": [
+          {
+            "sectionId": "interactions",
+            "quote": "Exit finds the active ticket, computes the fee, pays, then closes the ticket and releases the spot."
+          }
+        ],
+        "explanation": "The submission describes sequential interaction flows but omits concrete method signatures, parameter passing, and explicit interface definitions.",
+        "suggestion": "Specify explicit method signatures for entry and exit flows on `ParkingLot` and define the contracts for `Clock` and `PaymentGateway`."
+      },
+      {
+        "criterionId": "extensibility_tradeoffs",
+        "label": "needs_improvement",
+        "evidence": [
+          {
+            "sectionId": "tradeOffs",
+            "quote": "A pricing interface supports new rate policies."
+          }
+        ],
+        "explanation": "While an interface for pricing is mentioned, there is no explanation of how a new vehicle type is introduced across the domain model.",
+        "suggestion": "Explain how adding another vehicle type affects spot allocation, vehicle modeling, and fee rules."
+      },
+      {
+        "criterionId": "edge_cases_testability",
+        "label": "strong",
+        "evidence": [
+          {
+            "sectionId": "edgeCases",
+            "quote": "Use fake clock and payment implementations. Test full or mismatched capacity, duplicate entry and exit, failed payment, 59/60/61-minute fee boundaries, and simultaneous allocations."
+          }
+        ],
+        "explanation": "The testing strategy explicitly identifies boundary conditions, failure paths, concurrency, and collaborator decoupling using fakes.",
+        "suggestion": "Provide concrete test assertions demonstrating how the ticket and spot states remain unchanged upon payment failure."
+      }
+    ],
+    "priorityImprovements": [
+      "Define concrete method signatures and contracts for collaborator interfaces (Clock, PaymentGateway, PricingPolicy).",
+      "Describe how to introduce a new vehicle type alongside the pricing strategy extensibility.",
+      "Detail how capacity by vehicle type is tracked and queried, and state assumptions regarding mid-stay rate changes."
+    ]
+  },
+  "failure": null,
+  "sections": {
+    "requirements": "One lot with matching motorcycle/car spots. Reject full capacity, duplicate active vehicles, and invalid tickets. Round fees up to started hours with a one-hour minimum. Release the spot only after successful payment.",
+    "responsibilities": "ParkingLot owns allocation. Spot owns occupancy and vehicle type. Ticket records vehicle, spot, entry time, and status. PricingPolicy computes fees. PaymentGateway charges. Clock supplies time.",
+    "interactions": "Entry locks allocation, finds a free matching spot, reserves it, and issues a ticket. Exit finds the active ticket, computes the fee, pays, then closes the ticket and releases the spot. Failed payment keeps the ticket and occupancy. Repeated exit returns an error without charging.",
+    "edgeCases": "Use fake clock and payment implementations. Test full or mismatched capacity, duplicate entry and exit, failed payment, 59/60/61-minute fee boundaries, and simultaneous allocations.",
+    "tradeOffs": "A single-process lock keeps allocation atomic. A pricing interface supports new rate policies. The lock does not coordinate multiple processes; persistent transactions would replace it if that scope were introduced."
+  },
+  "evaluationId": "live-check-evaluation-eccbeea4-4404-4c71-92ec-71d98616cf2f",
+  "validation": "Accepted by the domain rubric validator and persisted in the isolated check database."
+}
